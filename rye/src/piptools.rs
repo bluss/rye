@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
 
 use anyhow::{bail, Context, Error};
 
@@ -12,12 +13,17 @@ use crate::utils::{get_venv_python_bin, CommandOutput};
 
 const PIP_TOOLS_VERSION: &str = "pip-tools==6.13.0";
 
+static PIP_TOOLS_LOCK: Mutex<()> = Mutex::new(());
+
 fn get_pip_tools_bin(py_ver: &PythonVersion, output: CommandOutput) -> Result<PathBuf, Error> {
     let self_venv = ensure_self_venv(output)?;
     let key = format!("{}@{}.{}", py_ver.kind, py_ver.major, py_ver.minor);
     let venv = get_app_dir().join("pip-tools").join(key);
 
     let py = get_venv_python_bin(&venv);
+
+    // ensure only one thread at a time tries to do this.
+    let _guard = PIP_TOOLS_LOCK.lock().unwrap();
 
     if venv.join(&py).is_file() {
         return Ok(venv);

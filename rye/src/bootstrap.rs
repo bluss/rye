@@ -4,6 +4,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{self, AtomicBool};
+use std::sync::Mutex;
 use std::{env, fs};
 
 use anyhow::{bail, Context, Error};
@@ -22,6 +23,8 @@ use crate::sources::{get_download_url, PythonVersion, PythonVersionRequest};
 use crate::utils::{
     check_checksum, set_proxy_variables, symlink_file, unpack_archive, CommandOutput,
 };
+
+static SELF_VENV_LOCK: Mutex<()> = Mutex::new(());
 
 /// this is the target version that we want to fetch
 pub const SELF_PYTHON_TARGET_VERSION: PythonVersionRequest = PythonVersionRequest {
@@ -70,6 +73,9 @@ pub fn ensure_self_venv(output: CommandOutput) -> Result<PathBuf, Error> {
     let app_dir = get_app_dir();
     let venv_dir = app_dir.join("self");
     let pip_tools_dir = app_dir.join("pip-tools");
+
+    // ensure only one thread at a time tries to do this.
+    let _guard = SELF_VENV_LOCK.lock().unwrap();
 
     if venv_dir.is_dir() {
         if is_up_to_date() {
