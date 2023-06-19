@@ -14,6 +14,7 @@ mod platform;
 mod pyproject;
 mod sources;
 mod sync;
+mod threads;
 mod utils;
 
 static SHOW_CONTINUE_PROMPT: AtomicBool = AtomicBool::new(false);

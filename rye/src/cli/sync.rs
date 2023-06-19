@@ -43,6 +43,9 @@ pub struct Args {
     /// Use this pyproject.toml file
     #[arg(long, value_name = "PYPROJECT_TOML")]
     pyproject: Option<PathBuf>,
+    /// Disable running resolution in parallel
+    #[arg(long)]
+    no_parallel: bool,
 }
 
 pub fn execute(cmd: Args) -> Result<(), Error> {
@@ -65,6 +68,7 @@ pub fn execute(cmd: Args) -> Result<(), Error> {
             all_features: cmd.all_features,
         },
         pyproject: cmd.pyproject,
+        no_parallel: cmd.no_parallel,
     })?;
     Ok(())
 }

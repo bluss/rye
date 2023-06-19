@@ -17,6 +17,7 @@ use crate::piptools::get_pip_sync;
 use crate::platform::get_toolchain_python_bin;
 use crate::pyproject::{get_current_venv_python_version, ExpandedSources, PyProject};
 use crate::sources::PythonVersion;
+use crate::threads::parallel_call;
 use crate::utils::{get_venv_python_bin, set_proxy_variables, symlink_dir, CommandOutput};
 
 /// Controls the sync mode
@@ -50,6 +51,8 @@ pub struct SyncOptions {
     pub lock_options: LockOptions,
     /// Explicit pyproject location (Only usable by PythonOnly mode)
     pub pyproject: Option<PathBuf>,
+    /// Disable running operations in parallel
+    pub no_parallel: bool,
 }
 
 impl SyncOptions {
@@ -169,48 +172,62 @@ pub fn sync(cmd: SyncOptions) -> Result<(), Error> {
             }
         } else if let Some(workspace) = pyproject.workspace() {
             // make sure we have an up-to-date lockfile
-            update_workspace_lockfile(
-                &py_ver,
-                workspace,
-                LockMode::Production,
-                &lockfile,
-                cmd.output,
-                &sources,
-                &cmd.lock_options,
-            )
-            .context("could not write production lockfile for workspace")?;
-            update_workspace_lockfile(
-                &py_ver,
-                workspace,
-                LockMode::Dev,
-                &dev_lockfile,
-                cmd.output,
-                &sources,
-                &cmd.lock_options,
-            )
-            .context("could not write dev lockfile for workspace")?;
+            parallel_call(
+                !cmd.no_parallel,
+                || {
+                    update_workspace_lockfile(
+                        &py_ver,
+                        workspace,
+                        LockMode::Production,
+                        &lockfile,
+                        cmd.output,
+                        &sources,
+                        &cmd.lock_options,
+                    )
+                    .context("could not write production lockfile for workspace")
+                },
+                || {
+                    update_workspace_lockfile(
+                        &py_ver,
+                        workspace,
+                        LockMode::Dev,
+                        &dev_lockfile,
+                        cmd.output,
+                        &sources,
+                        &cmd.lock_options,
+                    )
+                    .context("could not write dev lockfile for workspace")
+                },
+            )?;
         } else {
             // make sure we have an up-to-date lockfile
-            update_single_project_lockfile(
-                &py_ver,
-                &pyproject,
-                LockMode::Production,
-                &lockfile,
-                cmd.output,
-                &sources,
-                &cmd.lock_options,
-            )
-            .context("could not write production lockfile for project")?;
-            update_single_project_lockfile(
-                &py_ver,
-                &pyproject,
-                LockMode::Dev,
-                &dev_lockfile,
-                cmd.output,
-                &sources,
-                &cmd.lock_options,
-            )
-            .context("could not write dev lockfile for project")?;
+            parallel_call(
+                !cmd.no_parallel,
+                || {
+                    update_single_project_lockfile(
+                        &py_ver,
+                        &pyproject,
+                        LockMode::Production,
+                        &lockfile,
+                        cmd.output,
+                        &sources,
+                        &cmd.lock_options,
+                    )
+                    .context("could not write production lockfile for project")
+                },
+                || {
+                    update_single_project_lockfile(
+                        &py_ver,
+                        &pyproject,
+                        LockMode::Dev,
+                        &dev_lockfile,
+                        cmd.output,
+                        &sources,
+                        &cmd.lock_options,
+                    )
+                    .context("could not write dev lockfile for project")
+                },
+            )?;
         }
 
         // run pip install with the lockfile.
